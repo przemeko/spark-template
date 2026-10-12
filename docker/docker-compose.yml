@@ -1,0 +1,81 @@
+version: '3.8'
+
+x-spark-common: &spark-common
+  image: da-spark-image
+
+  environment:
+      - PYTHONPATH=/opt/spark/apps:${PYTHONPATH}
+        # Prevent Spark services from running as background (daemon) processes
+        # This forces Spark Master / Worker / History Server to run in the foreground
+      - SPARK_NO_DAEMONIZE=true
+
+  volumes:
+    # Input/output data for Spark jobs
+    - ../data:/opt/spark/data
+
+    # PySpark applications submitted with spark-submit
+    - ../src:/opt/spark/apps
+
+    # Tests
+    - ../test:/opt/spark/test
+
+    # Shared event logs used by the History Server
+    - spark-logs:/opt/spark/spark-events
+
+services:
+  spark-master:
+    <<: *spark-common
+
+    container_name: da-spark-master
+
+    # Build the Spark image from the Dockerfile in this directory
+    build: .
+
+    entrypoint: ['./entrypoint.sh', 'master']
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+    ports:
+      # Spark Master Web UI
+      - '9090:8080'
+
+      # Spark cluster communication port
+      - '7077:7077'
+
+  spark-worker:
+    # No fixed container name so Docker Compose can scale workers
+    # Example: docker compose up --scale spark-worker=3
+    <<: *spark-common
+
+    entrypoint: ['./entrypoint.sh', 'worker']
+
+    depends_on:
+      - spark-master
+
+  spark-history-server:
+    container_name: da-spark-history
+
+    image: da-spark-image
+
+    entrypoint: ['./entrypoint.sh', 'history']
+
+    depends_on:
+      - spark-master
+
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+
+    volumes:
+      - spark-logs:/opt/spark/spark-events
+
+    # Expose History Server UI
+    ports:
+      - '18080:18080'
+
+volumes:
+  # Persistent Spark event logs shared across containers
+  spark-logs:

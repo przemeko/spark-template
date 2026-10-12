@@ -1,0 +1,12 @@
+__pycache__/
+*.py[codz]
+*$py.class
+
+.DS_Store
+
+.venv
+.ipynb_checkpoints
+
+
+data/*
+!data/.gitignore
